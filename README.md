@@ -1,26 +1,15 @@
-# JDHttpAPI
-JDownloader2 plugin with a local HTTP API to add new files for download
+fork from [nemec/JDHttpAPI: JDownloader2 plugin with a local HTTP API to add new files for download](https://github.com/nemec/JDHttpAPI)
 
-This plugin is loaded by JDownloader2, which then starts up an embedded Jetty
-HTTP server to receive 
 
-From there, just about anything can send requests to queue up a new link. I
-like to use [Tampermonkey userscripts](https://tampermonkey.net/) to scrape
-links directly from web pages as I browse.
+# Extension: [nemec/JDHttpAPI: JDownloader2 plugin with a local HTTP API to add new files for download](https://github.com/nemec/JDHttpAPI)
+* 內嵌 Jetty HTTP server
+* 提供 HTTP API 新增連結
 
-Note: it binds to your IP address, therefore other PCs on the network can add
-links. Configure a password or update the code to bind to something else - 
-there is not currently a way configure local-only access. This plugin also
-accepts all Origins over ajax.
+## 安裝
+1. https://github.com/nemec/JDHttpAPI/releases 下載 JDHttpAPI.jar
+2. jar 放在 extensions 
+3. tmp/extensioncache/extensionInfos.json 加入如下片段, jarPath 依據安裝環境調整
 
-## Install
-
-1. Close JDownloader.
-2. Build or [download](https://github.com/nemec/JDHttpAPI/releases) the `JDHttpApi.jar` file.
-3. Place that file in `./extensions/` inside the JDownloader2 program folder.
-3. Open the file `./tmp/extensioncache/extensionInfos.json` in your JD program
-    folder and insert the following JSON as a new element in the array:
-    
 ```
 {
   "settings" : true,
@@ -39,91 +28,45 @@ accepts all Origins over ajax.
   "jarPath" : "/absolute/path/to/jd2/extensions/JDHttpApi.jar"
 }
 ```
+4. update/versioninfo/JD/extensions.installed.json 新增 "jdhttpapi"
+5. 啟動 JDownloader
+6. 設定中啟用 JDHttpAPI
 
-4. Open the file `./update/versioninfo/JD/extensions.installed.json` inside the
-    JD program folder and insert the string `"jdhttpapi"` as the last element
-    in the JSON array.
-5. Start JDownloader2 and go to the settings page to enable the extension.
+## 編譯打包
+1. IDEA 開啟 ext-jdhttpapi
+2. Build | Build Artifacts | Rebuild
+3. 輸出 out\artifacts\JDHttpApi_jar\JDHttpApi.jar
 
-Note: there is no official extension install process, so most of this is
-tricking JD into thinking the JAR is already installed. It's possible that
-an update will trigger a cache invalidation that boots out this extension. Just
-reapply the steps above and you should get it back.
-
-## Configure
-
-This plugin has four settings to configure through the JDownloader GUI. In order
-to make changes take effect, disable and then re-enable the extension.
-
-1. Use a password: require password authentication.
-2. Port: the port that the HTTP server listens on. Defaults to 8297.
-3. Password: If you've enabled the password feature, set it here.
-4. Allow Get: This disables HTTP GET access to the API. When enabled, you
-    must POST new links as JSON. This can help you reduce exposure to CSRF
-    vulnerabilities, especially when combined with a password.
-
-![screenshot of configuration panel](settings-screenshot.png)
-
-## Use
-
-There is currently only one URL: `/addLink`. You may submit via POST or GET.
-
-### GET Service
-
-There are three parameters, only `url` is required:
-
-* `url`: The URL to add.
-* `packageName`: If you want to configure a custom package name, send it here.
-* `forcePackageName`: Set this to `true` to set the package name. For whatever
-    reason, this is a separate field in JD's internals but if you don't force
-    it, the package name will not be changed. It's possible I am hooking in too
-    late in the process.
-
-The response has three possible values:
-
-On success: `{"success":true}`
-On malformed input: `{"errorMessage":"some error message"}`
-On authentication failure: `Login to access API` (this is not JSON)
-    
-CURL Examples:
+## 原始碼目錄結構
 
 ```
-curl 'http://localhost:8297/addLink?url=https://i.imgur.com/muChjiN.jpg'
-curl 'http://localhost:8297/addLink?url=https://i.imgur.com/muChjiN.jpg&packageName=cutebunny&forcePackageName=true'
+/.idea ; IDEA 配置
+/lib ; JDownloader 依賴包
+/src/main/java ; 原始碼
+    /META-INF
+    /org/jdownloader/extensions/httpAPI
+        /handlers
+            - AjaxHandler.java
+            - AuthorizationHandler.java ; 繼承 AbstractHandler 實作 basic 認證
+            - BaseHandler.java ; 繼承 AbstractHandler 的基礎 jetty server http handler, 路由定義
+            - JDServerGETHandler.java
+            - JDServerPOSTHandler.java
+        /models ; model 定義
+            - AddLinkRequest.java
+            - AddLinkResponse.java
+            - ErrorResponse.java
+        - CFG_HTTPAPI.java ; 讀取配置
+        - HttpAPIConfig.java ; 配置 UI 實作
+        - HttpAPIConfigPanel.java
+        - HttpAPIExtension.java ; 擴展核心
+        - HttpAPITranslation.java ; 語系轉換
+        - JDLinkController.java  ; 實作 LinkController 介面, 透過 LinkCollector 新增連結
+        - LinkController.java ; LinkController 介面
+        - ParseException.java ; 自訂例外
+
 ```
 
-### POST Service
-
-Send a JSON object via POST with the same values as in the GET request:
-
-```
-curl -X POST 'http://localhost:8297/addLink' \
-     -d '{"url":"https://i.imgur.com/muChjiN.jpg"}'
-curl -X POST 'http://localhost:8297/addLink' \
-     -d '{"url":"https://i.imgur.com/muChjiN.jpg","packageName":"cutebunny","forcePackageName":true}'
-```
-
-### Authentication
-
-If you choose to use a password, send it as the password portion of HTTP Basic
-Authentication - leave the username blank.
-
-CURL Example:
-
-```
-curl -u ':mypassword' 'http://192.168.1.7:8297/addLink?url=https://i.imgur.com/muChjiN.jpg'
-curl -u ':mypassword' -X POST 'http://localhost:8297/addLink' \
-     -d '{"url":"https://i.imgur.com/muChjiN.jpg"}'
-```
-
-## Errata
-
-JDownloader2's extension system is surprisingly
-modular and easy to understand (aside from the install process). Feel free to
-use this project as an example for building other JD extensions as even the
-built-in ones are a bit more complex than this. Just make sure to have
-[the source code](https://svn.jdownloader.org/projects/jd) open up in
-another window for reference - there is virtually no documentation available
-and this project only uses the bare minimum of features.
-
-
+## HttpAPIExtension.java
+* 繼承 AbstractExtension
+* 初始配置 UI
+* 啟動/停止 jetty server
